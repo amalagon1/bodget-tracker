@@ -1,18 +1,72 @@
 let transactions = [];
 let myChart;
+let online = window.navigator.online;
+let offlineRequests = [];
 
-fetch("/api/transaction")
+
+fetch("http://localhost:3001/test", { method: 'GET', mode: 'cors' })
   .then(response => {
+
     return response.json();
+
   })
   .then(data => {
     // save db data on global variable
-    transactions = data;
-
-    populateTotal();
-    populateTable();
-    populateChart();
+    console.log(data)
   });
+
+
+window.addEventListener('online', () => {
+  console.log(offlineRequests)
+  // handleOfflineRequests()
+  getTransactions()
+  online = true
+})
+window.addEventListener('offline', () => online = false)
+function getTransactions() {
+  console.log('getting transactions')
+  if (online) {
+    fetch("/api/transaction", { method: 'GET', mode: 'cors' })
+      .then(response => {
+
+        return response.json();
+
+      })
+      .then(data => {
+        // save db data on global variable
+        transactions = data;
+        console.log(data)
+        populateTotal();
+        populateTable();
+        populateChart();
+      });
+
+  }
+
+}
+getTransactions()
+function handleOfflineRequests() {
+  offlineRequests.forEach(x => {
+    console.log('offline transaction', x)
+    fetch("http://localhost:3001/api/transaction", {
+      method: "POST",
+      body: JSON.stringify(x),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/json"
+      }
+    })
+      .then(response => {
+        return response.json();
+      })
+      .catch(err => {
+        console.log('error handling offline requests', err)
+      });
+  }
+
+  )
+}
+
 
 function populateTotal() {
   // reduce transaction amounts to a single total value
@@ -66,14 +120,14 @@ function populateChart() {
 
   myChart = new Chart(ctx, {
     type: 'line',
-      data: {
-        labels,
-        datasets: [{
-            label: "Total Over Time",
-            fill: true,
-            backgroundColor: "#6666ff",
-            data
-        }]
+    data: {
+      labels,
+      datasets: [{
+        label: "Total Over Time",
+        fill: true,
+        backgroundColor: "#6666ff",
+        data
+      }]
     }
   });
 }
@@ -111,43 +165,48 @@ function sendTransaction(isAdding) {
   populateChart();
   populateTable();
   populateTotal();
-  
-  // also send to server
-  fetch("/api/transaction", {
-    method: "POST",
-    body: JSON.stringify(transaction),
-    headers: {
-      Accept: "application/json, text/plain, */*",
-      "Content-Type": "application/json"
-    }
-  })
-  .then(response => {    
-    return response.json();
-  })
-  .then(data => {
-    if (data.errors) {
-      errorEl.textContent = "Missing Information";
-    }
-    else {
-      // clear form
-      nameEl.value = "";
-      amountEl.value = "";
-    }
-  })
-  .catch(err => {
-    // fetch failed, so save in indexed db
-    saveRecord(transaction);
 
-    // clear form
-    nameEl.value = "";
-    amountEl.value = "";
-  });
+  // also send to server
+  if (online) {
+    fetch("http://localhost:3001/api/transaction", {
+      method: "POST",
+      body: JSON.stringify(transaction),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/json"
+      }
+    })
+      .then(response => {
+        return response.json();
+      })
+      .then(data => {
+        if (data.errors) {
+          errorEl.textContent = "Missing Information";
+        }
+        else {
+          // clear form
+          nameEl.value = "";
+          amountEl.value = "";
+        }
+      })
+      .catch(err => {
+        // fetch failed, so save in indexed db
+        saveRecord(transaction);
+
+        // clear form
+        nameEl.value = "";
+        amountEl.value = "";
+      });
+  } else {
+    offlineRequests.push(transaction)
+  }
+
 }
 
-document.querySelector("#add-btn").onclick = function() {
+document.querySelector("#add-btn").onclick = function () {
   sendTransaction(true);
 };
 
-document.querySelector("#sub-btn").onclick = function() {
+document.querySelector("#sub-btn").onclick = function () {
   sendTransaction(false);
 };
